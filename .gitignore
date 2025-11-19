@@ -1,0 +1,12 @@
+
+# Bỏ qua thư mục dữ liệu
+data/
+raw_data/
+dataset.zip
+
+# Bỏ qua các file cache của python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Giữ lại thư mục src và models, nhưng bỏ qua các file tạm
