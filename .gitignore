@@ -1,0 +1,12 @@
+# Model files
+deploy/*.onnx
+deploy/*.h5
+
+# Virtualenv
+env/
+venv/
+.venv/
+
+#Python
+__pycache__/
+*.pyc
