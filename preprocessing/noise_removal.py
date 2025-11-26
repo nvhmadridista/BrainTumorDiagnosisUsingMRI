@@ -6,5 +6,4 @@ def remove_noise(img, method="bilateral"):
     elif method == "median":
         return cv2.medianBlur(img, 3)
     else:
-        # Bilateral giữ biên tốt → phù hợp MRI
         return cv2.bilateralFilter(img, 9, 75, 75)

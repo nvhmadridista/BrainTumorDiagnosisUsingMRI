@@ -6,31 +6,27 @@ from resize_normalize import load_and_resize, normalize_minmax
 from noise_removal import remove_noise
 
 
-# RAW_DIR = "dataset/Training"
+# RAW_DIR = "data/raw/Training"
 RAW_DIR = "dataset/Validation"
 
 # OUT_DIR = "data/processed/Training"
 OUT_DIR = "data/processed/Validation"
-SIZE = 224   # hoặc 256
+SIZE = 224  
 
 def ensure_dir(path):
     if not os.path.exists(path):
         os.makedirs(path)
 
 def preprocess_image(input_path, output_path):
-    # 1. Load & resize
+
     img = load_and_resize(input_path, size=SIZE)
 
-    # 2. Remove noise
     img = remove_noise(img)
-
-    # 3. Normalize → [0,1]
+    
     img = normalize_minmax(img)
 
-    # 4. Convert lại về dạng 0–255 để lưu
     img = (img * 255).astype("uint8")
-
-    # 5. Save
+    
     cv2.imwrite(output_path, cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
 
 def preprocess_folder():
