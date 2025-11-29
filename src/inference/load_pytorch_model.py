@@ -10,7 +10,9 @@ def load_torch_model(model_path: str, device='cpu'):
     return model
 
 def predict_torch(model, input_tensor: np.ndarray, device='cpu'):
-    input_tensor = torch.from_numpy(input_tensor).to(device)
+    input_tensor = input_tensor.to(device)
+    if input_tensor.ndim == 3:
+        input_tensor = input_tensor.unsqueeze(0)
     with torch.no_grad():
         logits = model(input_tensor)  # shape (1, num_classes)
         probs = torch.softmax(logits, dim=1).cpu().numpy()

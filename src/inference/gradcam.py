@@ -1,77 +1,69 @@
 import torch
 import torch.nn.functional as F
-from torch import nn
 import numpy as np
 import cv2
 
 class GradCAM:
-    def __init__(self, model: nn.Module, target_layer: nn.Module):
+    def __init__(self, model, target_layer):
         self.model = model
-        self.model.eval()
         self.target_layer = target_layer
 
-        # nơi lưu feature map & gradient
-        self.activations = None
         self.gradients = None
+        self.activations = None
 
-        # gắn hook
-        self._register_hooks()
+        target_layer.register_forward_hook(self.forward_hook)
+        target_layer.register_backward_hook(self.backward_hook)
 
-    def _register_hooks(self):
-        def forward_hook(module, inp, output):
-            self.activations = output
+    def forward_hook(self, module, input, output):
+        # output: (1, C, H, W)
+        self.activations = output.detach()
 
-        def backward_hook(module, grad_in, grad_out):
-            # grad_out chứa gradient của output layer
-            self.gradients = grad_out[0]
+    def backward_hook(self, module, grad_input, grad_output):
+        # grad_output[0]: (1, C, H, W)
+        self.gradients = grad_output[0].detach()
 
-        self.target_layer.register_forward_hook(forward_hook)
-        self.target_layer.register_backward_hook(backward_hook)
-
-    def generate(self, input_tensor, target_class=None):
-        # Forward
-        output = self.model(input_tensor)
-
-        if target_class is None:
-            target_class = output.argmax(dim=1).item()
+    def generate(self, x):
+        # Forward 
+        logits = self.model(x)
+        class_idx = logits.argmax(dim=1).item()
+        score = logits[:, class_idx]
 
         # Backward
         self.model.zero_grad()
-        loss = output[0, target_class]
-        loss.backward()
+        score.backward()
 
-        # Activation + gradient 
-        activations = self.activations.detach()      # (C, h, w)
-        gradients = self.gradients.detach()          # (C, h, w)
+        # Lấy gradient & activation
+        gradients = self.gradients      # (1, C, H, W)
+        activations = self.activations  # (1, C, H, W)
 
-        # Global Average Pool gradient 
-        weights = gradients.mean(dim=(1, 2))         # (C)
+        # (1, C, 1, 1)
+        weights = gradients.mean(dim=(2, 3), keepdim=True)
 
-        # Weighted sum 
-        cam = torch.zeros(activations.shape[1:], dtype=torch.float32)
+        # (1, H, W)
+        cam = (weights * activations).sum(dim=1)
 
-        for i, w in enumerate(weights):
-            cam += w * activations[i]
+        cam = torch.relu(cam)
 
-        # ReLU
-        cam = torch.clamp(cam, min=0)
+        cam = cam.squeeze()
 
         # Normalize
-        cam = cam - cam.min()
-        cam = cam / (cam.max() + 1e-8)
+        cam -= cam.min()
+        cam /= (cam.max() + 1e-8)
 
-        # Resize về input size
+        # 224x224
         cam = F.interpolate(
-            cam.unsqueeze(0).unsqueeze(0),
-            size=input_tensor.shape[2:],
+            cam.unsqueeze(0).unsqueeze(0),  # (1, 1, H, W)
+            size=(224, 224),
             mode="bilinear",
             align_corners=False
-        )[0, 0].cpu().numpy()
+        )[0, 0]
 
-        return cam
+        return cam.cpu().numpy()
 
-def overlay_heatmap(heatmap, img, alpha=0.5):
-    heatmap_uint8 = np.uint8(255 * heatmap)
-    heatmap_color = cv2.applyColorMap(heatmap_uint8, cv2.COLORMAP_JET)
-    blended = cv2.addWeighted(img, 1 - alpha, heatmap_color, alpha, 0)
-    return blended
+def overlay_heatmap(cam, pil_image):
+    image = np.array(pil_image.resize((224, 224)))
+    heatmap = (cam * 255).astype(np.uint8)
+    heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
+    overlay = cv2.addWeighted(image, 0.5, heatmap, 0.5, 0)
+
+    return overlay

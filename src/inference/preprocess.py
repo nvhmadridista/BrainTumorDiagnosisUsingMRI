@@ -1,38 +1,31 @@
 from PIL import Image
 import numpy as np
+import torch
 
 # Mean và std của ImageNet (RGB)
 IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
 IMAGENET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
-def resize_and_center_crop(image: Image.Image, size=224, resize_size=256) -> Image.Image:
+def preprocess(image: Image.Image) -> torch.Tensor:
     """
-    Resize ảnh về resize_size rồi center crop size x size.
-    """
-    image = image.resize((resize_size, resize_size), resample=Image.BILINEAR)
-    left = (resize_size - size) // 2
-    top = (resize_size - size) // 2
-    right = left + size
-    bottom = top + size
-    image = image.crop((left, top, right, bottom))
-    return image
-
-def preprocess(image: Image.Image) -> np.ndarray:
-    """
-    Tiền xử lý ảnh PIL thành input numpy float32 cho model.
-    Output shape: (1, 224, 224, 3), dtype=float32
+    Trả về tensor PyTorch shape (1, 3, 224, 224), float32.
     """
 
-    img = resize_and_center_crop(image)
-    img = np.array(img).astype(np.float32) / 255.0
+    if image.mode != "RGB":
+        image = image.convert("RGB")
 
-    if img.ndim == 2:
-        img = np.stack([img]*3, axis=-1)
-    elif img.shape[2] == 1:
-        img = np.concatenate([img]*3, axis=-1)
-
+    image = image.resize((224, 224), resample=Image.BILINEAR)
+    img = np.array(image).astype(np.float32) / 255.0
     img = (img - IMAGENET_MEAN) / IMAGENET_STD
 
-    img = np.expand_dims(img, axis=0)
+    # HWC -> CHW  
+    img = np.transpose(img, (2, 0, 1))  # (3, 224, 224)
 
-    return img
+    img = np.expand_dims(img, axis=0)   # (1, 3, 224, 224)
+
+    tensor = torch.from_numpy(img).float()
+
+    return tensor
+
+def resize_for_overlay(image: Image.Image) -> Image.Image:
+    return image.resize((224, 224), resample=Image.BILINEAR)

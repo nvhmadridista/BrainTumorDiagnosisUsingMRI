@@ -6,7 +6,7 @@ import cv2
 import torch
 import numpy as np
 
-from src.inference.preprocess import preprocess
+from src.inference.preprocess import preprocess, resize_for_overlay
 from src.inference.load_pytorch_model import load_torch_model, predict_torch
 from src.inference.gradcam import GradCAM, overlay_heatmap
 
@@ -60,11 +60,13 @@ async def gradcam(file: UploadFile = File(...)):
     else:
         input_tensor_torch = input_tensor.to(device)
 
-    target_layer = torch_model.stage4[-1]   # layer cuối của backbone
+    target_layer = torch_model.stage3   # chọn stage, block hay layer trong backbone
     
     cam = GradCAM(torch_model, target_layer)
     heatmap = cam.generate(input_tensor_torch)
-    overlay = overlay_heatmap(heatmap, image)
+
+    image_for_overlay = resize_for_overlay(image)
+    overlay = overlay_heatmap(heatmap, image_for_overlay)
 
     _, buffer = cv2.imencode(".png", overlay)
     b64 = base64.b64encode(buffer).decode()
