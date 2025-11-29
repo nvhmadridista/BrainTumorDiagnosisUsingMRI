@@ -4,19 +4,16 @@ import io
 import base64
 import cv2
 import torch
+import numpy as np
 
 from src.inference.preprocess import preprocess
-from src.inference.load_onnx_model import ONNXModel
 from src.inference.load_pytorch_model import load_torch_model, predict_torch
 from src.inference.gradcam import GradCAM, overlay_heatmap
 
 app = FastAPI(title="API Phân loại U não từ MRI")
 
-# Khởi tạo model ONNX và PyTorch
-onnx_path = "deploy/model.onnx"
+# Khởi tạo model PyTorch
 pth_path = "deploy/best_model.pth"
-
-onnx_model = ONNXModel(onnx_path)
 torch_model = load_torch_model(pth_path)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -24,7 +21,7 @@ torch_model.to(device)
 torch_model.eval()
 
 @app.post("/predict/")
-async def predict(file: UploadFile = File(...), use_onnx: bool = True):
+async def predict(file: UploadFile = File(...)):
     if file.content_type not in ["image/jpeg", "image/png"]:
         raise HTTPException(status_code=400, detail="File phải là ảnh JPEG hoặc PNG")
 
@@ -36,10 +33,12 @@ async def predict(file: UploadFile = File(...), use_onnx: bool = True):
 
     input_tensor = preprocess(image)
 
-    if use_onnx:
-        pred_class, softmax_probs = onnx_model.predict(input_tensor)
+    if isinstance(input_tensor, np.ndarray):
+        input_tensor_torch = torch.from_numpy(input_tensor).to(device)
     else:
-        pred_class, softmax_probs = predict_torch(torch_model, input_tensor, device=device)
+        input_tensor_torch = input_tensor.to(device)
+
+    pred_class, softmax_probs = predict_torch(torch_model, input_tensor_torch)
 
     return {
         "class": int(pred_class),
@@ -55,12 +54,16 @@ async def gradcam(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="Không thể mở ảnh")
 
     input_tensor = preprocess(image)
-    input_tensor_torch = torch.from_numpy(input_tensor).to(device)
+    
+    if isinstance(input_tensor, np.ndarray):
+        input_tensor_torch = torch.from_numpy(input_tensor).to(device)
+    else:
+        input_tensor_torch = input_tensor.to(device)
 
     target_layer = torch_model.stage4[-1]   # layer cuối của backbone
     
     cam = GradCAM(torch_model, target_layer)
-    heatmap = cam.generate(input_tensor)
+    heatmap = cam.generate(input_tensor_torch)
     overlay = overlay_heatmap(heatmap, image)
 
     _, buffer = cv2.imencode(".png", overlay)
