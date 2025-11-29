@@ -1,6 +1,6 @@
 # Model files
 deploy/*.onnx
-deploy/*.h5
+deploy/*.pth
 
 # Virtualenv
 env/

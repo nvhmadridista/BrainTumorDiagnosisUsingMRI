@@ -1,73 +1,72 @@
 from fastapi import FastAPI, File, UploadFile, HTTPException
-from fastapi.responses import JSONResponse
 from PIL import Image
 import io
 import base64
 import cv2
-import numpy as np
+import torch
 
 from src.inference.preprocess import preprocess
-from src.inference.load_model import ONNXModel
-from src.inference.gradcam import make_gradcam_heatmap, overlay_heatmap
-#from src.models.hybrid_model import build_hybrid_model
+from src.inference.load_onnx_model import ONNXModel
+from src.inference.load_pytorch_model import load_torch_model, predict_torch
+from src.inference.gradcam import GradCAM, overlay_heatmap
 
 app = FastAPI(title="API Phân loại U não từ MRI")
 
-# Khởi tạo model ONNX 
-MODEL_PATH = "deploy/model.onnx"
-model = ONNXModel(MODEL_PATH)
+# Khởi tạo model ONNX và PyTorch
+onnx_path = "deploy/model.onnx"
+pth_path = "deploy/best_model.pth"
 
-# Khởi tạo model Keras (dùng cho Grad-CAM)
-#keras_model = build_hybrid_model()
-keras_model = None
+onnx_model = ONNXModel(onnx_path)
+torch_model = load_torch_model(pth_path)
 
-# Cần có model thật đặt ở deploy/
-keras_model.load_weights("deploy/keras_weights.h5")  # Đường dẫn file weights Keras
-last_conv_layer_name = "convnext_tiny/block_4/project_conv"  # Tên layer conv cuối cùng của backbone?
-
-def pil_image_to_base64(img: np.ndarray) -> str:
-    """
-    Chuyển ảnh numpy RGB thành base64 PNG string
-    """
-    _, buffer = cv2.imencode(".png", cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
-    return base64.b64encode(buffer).decode()
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+torch_model.to(device)
+torch_model.eval()
 
 @app.post("/predict/")
-async def predict(file: UploadFile = File(...)):
-    # Kiểm tra file ảnh
+async def predict(file: UploadFile = File(...), use_onnx: bool = True):
     if file.content_type not in ["image/jpeg", "image/png"]:
         raise HTTPException(status_code=400, detail="File phải là ảnh JPEG hoặc PNG")
 
-    # Đọc ảnh từ upload
     image_bytes = await file.read()
     try:
         image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     except Exception:
         raise HTTPException(status_code=400, detail="Không thể mở ảnh")
 
-    # Tiền xử lý
     input_tensor = preprocess(image)
 
-    # Dự đoán
-    try:
-        pred_class, softmax_probs = model.predict(input_tensor)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Lỗi khi dự đoán: {e}")
+    if use_onnx:
+        pred_class, softmax_probs = onnx_model.predict(input_tensor)
+    else:
+        pred_class, softmax_probs = predict_torch(torch_model, input_tensor, device=device)
 
-    # Tạo Grad-CAM heatmap với model Keras
-    try:
-        heatmap = make_gradcam_heatmap(input_tensor, keras_model, last_conv_layer_name, pred_class)
-        img_np = np.array(image.resize((224, 224)))
-        overlay_img = overlay_heatmap(img_np, heatmap)
-        heatmap_base64 = pil_image_to_base64(overlay_img)
-    except Exception as e:
-        heatmap_base64 = ""
+    return {
+        "class": int(pred_class),
+        "softmax": softmax_probs.tolist()
+    }
 
-    return JSONResponse(content={
-        "predicted_class": int(pred_class),
-        "softmax_probabilities": softmax_probs.tolist(),
-         "gradcam_heatmap": heatmap_base64
-    })
+@app.post("/gradcam/")
+async def gradcam(file: UploadFile = File(...)):
+    image_bytes = await file.read()
+    try:
+        image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Không thể mở ảnh")
+
+    input_tensor = preprocess(image)
+    input_tensor_torch = torch.from_numpy(input_tensor).to(device)
+
+    target_layer = torch_model.stage4[-1]   # layer cuối của backbone
+    
+    cam = GradCAM(torch_model, target_layer)
+    heatmap = cam.generate(input_tensor)
+    overlay = overlay_heatmap(heatmap, image)
+
+    _, buffer = cv2.imencode(".png", overlay)
+    b64 = base64.b64encode(buffer).decode()
+
+    return {"gradcam": b64}
 
 if __name__ == "__main__":
     import uvicorn

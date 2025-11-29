@@ -1,50 +1,77 @@
-import tensorflow as tf
+import torch
+import torch.nn.functional as F
+from torch import nn
 import numpy as np
 import cv2
 
-def make_gradcam_heatmap(img_array, model, last_conv_layer_name, pred_index=None):
-    """
-    Tạo heatmap Grad-CAM cho mô hình Keras.
-    """
-    # Tạo model lấy output của last conv layer và output dự đoán
-    grad_model = tf.keras.models.Model(
-        [model.inputs],
-        [model.get_layer(last_conv_layer_name).output, model.output]
-    )
+class GradCAM:
+    def __init__(self, model: nn.Module, target_layer: nn.Module):
+        self.model = model
+        self.model.eval()
+        self.target_layer = target_layer
 
-    with tf.GradientTape() as tape:
-        conv_outputs, predictions = grad_model(img_array)
-        if pred_index is None:
-            pred_index = tf.argmax(predictions[0])
-        class_channel = predictions[:, pred_index]
+        # nơi lưu feature map & gradient
+        self.activations = None
+        self.gradients = None
 
-    grads = tape.gradient(class_channel, conv_outputs)
-    pooled_grads = tf.reduce_mean(grads, axis=(0, 1, 2))
+        # gắn hook
+        self._register_hooks()
 
-    conv_outputs = conv_outputs[0]
+    def _register_hooks(self):
+        def forward_hook(module, inp, output):
+            self.activations = output
 
-    heatmap = tf.reduce_sum(tf.multiply(pooled_grads, conv_outputs), axis=-1)
+        def backward_hook(module, grad_in, grad_out):
+            # grad_out chứa gradient của output layer
+            self.gradients = grad_out[0]
 
-    heatmap = tf.maximum(heatmap, 0)
-    max_val = tf.reduce_max(heatmap)
-    if max_val == 0:
-        return np.zeros((heatmap.shape[0], heatmap.shape[1]))
-    heatmap /= max_val
-    heatmap = heatmap.numpy()
+        self.target_layer.register_forward_hook(forward_hook)
+        self.target_layer.register_backward_hook(backward_hook)
 
-    heatmap = cv2.resize(heatmap, (img_array.shape[2], img_array.shape[1]))
+    def generate(self, input_tensor, target_class=None):
+        # Forward
+        output = self.model(input_tensor)
 
-    return heatmap
+        if target_class is None:
+            target_class = output.argmax(dim=1).item()
 
-def overlay_heatmap(img, heatmap, alpha=0.4, colormap=cv2.COLORMAP_JET):
-    """
-    Chồng heatmap lên ảnh gốc.
-    """
+        # Backward
+        self.model.zero_grad()
+        loss = output[0, target_class]
+        loss.backward()
+
+        # Activation + gradient 
+        activations = self.activations.detach()      # (C, h, w)
+        gradients = self.gradients.detach()          # (C, h, w)
+
+        # Global Average Pool gradient 
+        weights = gradients.mean(dim=(1, 2))         # (C)
+
+        # Weighted sum 
+        cam = torch.zeros(activations.shape[1:], dtype=torch.float32)
+
+        for i, w in enumerate(weights):
+            cam += w * activations[i]
+
+        # ReLU
+        cam = torch.clamp(cam, min=0)
+
+        # Normalize
+        cam = cam - cam.min()
+        cam = cam / (cam.max() + 1e-8)
+
+        # Resize về input size
+        cam = F.interpolate(
+            cam.unsqueeze(0).unsqueeze(0),
+            size=input_tensor.shape[2:],
+            mode="bilinear",
+            align_corners=False
+        )[0, 0].cpu().numpy()
+
+        return cam
+
+def overlay_heatmap(heatmap, img, alpha=0.5):
     heatmap_uint8 = np.uint8(255 * heatmap)
-    heatmap_color = cv2.applyColorMap(heatmap_uint8, colormap)
-    heatmap_color = cv2.cvtColor(heatmap_color, cv2.COLOR_BGR2RGB)
-
-    overlayed_img = heatmap_color * alpha + img * (1 - alpha)
-    overlayed_img = np.clip(overlayed_img, 0, 255).astype(np.uint8)
-
-    return overlayed_img
+    heatmap_color = cv2.applyColorMap(heatmap_uint8, cv2.COLORMAP_JET)
+    blended = cv2.addWeighted(img, 1 - alpha, heatmap_color, alpha, 0)
+    return blended
