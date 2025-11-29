@@ -10,3 +10,9 @@ venv/
 #Python
 __pycache__/
 *.pyc
+.ipynb_checkpoints/
+
+# Bỏ qua thư mục dữ liệu
+data/
+raw_data/
+dataset.zip
