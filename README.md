@@ -76,7 +76,7 @@ Dataset used: [**Brain Tumor MRI Dataset (Kaggle)**](https://www.kaggle.com/data
   - Brightness adjustment
   - Horizontal flipping
 
-### 4.3 Feature Extraction
+### 4.3 Model Architecture
 
 This project adopts a **hybrid CNN–Transformer approach**, leveraging:
 
