@@ -1,0 +1,8 @@
+# Core
+numpy>=2.0
+torch>=2.3
+pillow>=10.0
+
+# Jupyter notebook support
+notebook>=7.0
+ipykernel>=6.0
