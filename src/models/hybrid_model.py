@@ -81,6 +81,6 @@ class BrainTumorModel(nn.Module):
         x = self.norm_final(x)
         
         x = self.transformer(x)
-        x = x.mean(dim=1) 
+        x = x.mean(dim=1) # Global Average Pooling
         x = self.head(x)
         return x
