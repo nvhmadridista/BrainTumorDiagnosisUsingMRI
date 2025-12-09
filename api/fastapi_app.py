@@ -13,14 +13,18 @@ from src.inference.gradcam import GradCAM, overlay_heatmap
 app = FastAPI(title="API Phân loại U não từ MRI")
 
 # Khởi tạo model PyTorch
-pth_path = "deploy/best_model.pth"
+pth_path = "deploy/best_model_gpu.pth"
 torch_model = load_torch_model(pth_path)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 torch_model.to(device)
 torch_model.eval()
 
-@app.post("/predict/")
+# Khởi tạo GradCAM
+target_layer = torch_model.stage3  # chọn stage, block hay layer trong backbone
+cam = GradCAM(torch_model, target_layer)
+
+@app.post("/predict_with_gradcam/")
 async def predict(file: UploadFile = File(...)):
     if file.content_type not in ["image/jpeg", "image/png"]:
         raise HTTPException(status_code=400, detail="File phải là ảnh JPEG hoặc PNG")
@@ -32,46 +36,34 @@ async def predict(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="Không thể mở ảnh")
 
     input_tensor = preprocess(image)
-
     if isinstance(input_tensor, np.ndarray):
         input_tensor_torch = torch.from_numpy(input_tensor).to(device)
     else:
         input_tensor_torch = input_tensor.to(device)
 
-    pred_class, softmax_probs = predict_torch(torch_model, input_tensor_torch)
+    logits = torch_model(input_tensor_torch)
 
-    return {
-        "class": int(pred_class),
-        "softmax": softmax_probs.tolist()
-    }
+    # Dự đoán class và softmax
+    softmax_probs = torch.nn.functional.softmax(logits, dim=1)
+    pred_class = torch.argmax(softmax_probs, dim=1).item()
+    softmax_probs_list = softmax_probs[0].detach().cpu().numpy().tolist()
 
-@app.post("/gradcam/")
-async def gradcam(file: UploadFile = File(...)):
-    image_bytes = await file.read()
-    try:
-        image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-    except Exception:
-        raise HTTPException(status_code=400, detail="Không thể mở ảnh")
+    torch_model.zero_grad()
+    score = logits[0, pred_class]
+    score.backward(retain_graph=True)
 
-    input_tensor = preprocess(image)
-    
-    if isinstance(input_tensor, np.ndarray):
-        input_tensor_torch = torch.from_numpy(input_tensor).to(device)
-    else:
-        input_tensor_torch = input_tensor.to(device)
-
-    target_layer = torch_model.stage3   # chọn stage, block hay layer trong backbone
-    
-    cam = GradCAM(torch_model, target_layer)
-    heatmap = cam.generate(input_tensor_torch)
-
+    heatmap = cam.generate_cam() 
     image_for_overlay = resize_for_overlay(image)
     overlay = overlay_heatmap(heatmap, image_for_overlay)
 
     _, buffer = cv2.imencode(".png", overlay)
     b64 = base64.b64encode(buffer).decode()
 
-    return {"gradcam": b64}
+    return {
+        "class": int(pred_class),
+        "softmax": softmax_probs_list,
+        "gradcam": b64
+    }
 
 if __name__ == "__main__":
     import uvicorn

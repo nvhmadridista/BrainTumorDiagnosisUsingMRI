@@ -11,8 +11,12 @@ venv/
 __pycache__/
 *.pyc
 .ipynb_checkpoints/
+src/checkpoints/
 
 # Bỏ qua thư mục dữ liệu
 data/
 raw_data/
 dataset.zip
+dataset/
+dataset_imagenet/
+

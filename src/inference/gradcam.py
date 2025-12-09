@@ -21,18 +21,8 @@ class GradCAM:
     def backward_hook(self, module, grad_input, grad_output):
         # grad_output[0]: (1, C, H, W)
         self.gradients = grad_output[0].detach()
-
-    def generate(self, x):
-        # Forward 
-        logits = self.model(x)
-        class_idx = logits.argmax(dim=1).item()
-        score = logits[:, class_idx]
-
-        # Backward
-        self.model.zero_grad()
-        score.backward()
-
-        # Lấy gradient & activation
+    
+    def generate_cam(self):
         gradients = self.gradients      # (1, C, H, W)
         activations = self.activations  # (1, C, H, W)
 
@@ -40,11 +30,7 @@ class GradCAM:
         weights = gradients.mean(dim=(2, 3), keepdim=True)
 
         # (1, H, W)
-        cam = (weights * activations).sum(dim=1)
-
-        cam = torch.relu(cam)
-
-        cam = cam.squeeze()
+        cam = torch.relu((weights * activations).sum(dim=1)).squeeze()
 
         # Normalize
         cam -= cam.min()
