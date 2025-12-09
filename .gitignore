@@ -3,3 +3,4 @@ dataset_imagenet/
 __pycache__/
 *.pyc
 src/checkpoints/
+*.ts
