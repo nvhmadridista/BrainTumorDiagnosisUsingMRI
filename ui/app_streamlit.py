@@ -18,7 +18,7 @@ try:
 except Exception:
     pass
 
-DEFAULT_API_URL = "http://localhost:8000/predict"
+DEFAULT_API_URL = "https://brain-tumor-api.onrender.com/predict"
 API_URL = os.environ.get("API_URL", DEFAULT_API_URL)
 
 
