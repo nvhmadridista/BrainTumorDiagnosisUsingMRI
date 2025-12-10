@@ -13,29 +13,13 @@ import requests
 import streamlit as st
 from PIL import Image
 
-import subprocess
-import time
-
-def start_api():
-    if "api_started" not in st.session_state:
-        st.session_state.api_started = False
-
-    if not st.session_state.api_started:
-        st.session_state.api_started = True
-        subprocess.Popen(
-            ["uvicorn", "api.gradcam_api:app", "--host", "0.0.0.0", "--port", "8001"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-        time.sleep(2) 
-        
 try:
     st.set_page_config(page_title="Brain Tumor Diagnosis Using MRI", layout="wide")
 except Exception:
     pass
 
 DEFAULT_PREDICT_URL = "https://brain-tumor-diagnosis-predict-api.onrender.com/predict"
-DEFAULT_GRADCAM_URL = "http://localhost:8001/gradcam"
+DEFAULT_GRADCAM_URL = "https://nvhmadridista-Brain-Tumor-Diagnosis.hf.space/gradcam"
 
 API_PREDICT_URL = os.environ.get("API_PREDICT_URL", DEFAULT_PREDICT_URL)
 API_GRADCAM_URL = os.environ.get("API_GRADCAM_URL", DEFAULT_GRADCAM_URL)
@@ -47,7 +31,6 @@ def decode_base64_png(b64: str) -> Image.Image:
 
 
 def main() -> None:
-    start_api()
     st.title("Brain Tumor Diagnosis Using MRI")
         
     uploaded = st.file_uploader("Upload MRI image (JPG/PNG)", type=["jpg", "jpeg", "png"])
