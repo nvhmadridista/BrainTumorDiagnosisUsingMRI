@@ -27,6 +27,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("api")
 
 def download_model():
+    TS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    CKPT_PATH.parent.mkdir(parents=True, exist_ok=True)
+
     if not TS_PATH.exists():
         logger.info(f"Downloading TorchScript model from {TS_URL}")
         gdown.download(TS_URL, str(TS_PATH), quiet=False)
