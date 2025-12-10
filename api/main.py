@@ -21,8 +21,6 @@ CKPT_PATH = Path("src/checkpoints/best_model_gpu.pth")
 # Logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("api")
-
-
 class PredictResponse(BaseModel):
     predicted_class: str = Field(..., description="Predicted class label.")
     confidence_scores: List[float] = Field(..., description="Softmax probabilities aligned with class_names.")
