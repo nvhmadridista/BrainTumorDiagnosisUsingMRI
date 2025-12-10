@@ -7,6 +7,7 @@ FastAPI app that loads TorchScript model and serves /predict.
 import logging
 from pathlib import Path
 from typing import List
+import gdown
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import JSONResponse
@@ -18,11 +19,22 @@ from .inference import Predictor
 TS_PATH = Path("models/best_model.ts")
 CKPT_PATH = Path("src/checkpoints/best_model_gpu.pth")
 
+TS_URL = "https://drive.google.com/uc?id=1p31v6AtVpfWuxXbSEKZmsAm6uIiiDjO6"
+CKPT_URL = "https://drive.google.com/uc?id=1NrPv01afH327UcfsDcIgKJfrHHyCJ0Vo"
+
 # Logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("api")
 
+def download_model():
+    if not TS_PATH.exists():
+        logger.info(f"Downloading TorchScript model from {TS_URL}")
+        gdown.download(TS_URL, str(TS_PATH), quiet=False)
+    if not CKPT_PATH.exists():
+        logger.info(f"Downloading checkpoint from {CKPT_URL}")
+        gdown.download(CKPT_URL, str(CKPT_PATH), quiet=False)
 
+download_model()
 class PredictResponse(BaseModel):
     predicted_class: str = Field(..., description="Predicted class label.")
     confidence_scores: List[float] = Field(..., description="Softmax probabilities aligned with class_names.")
