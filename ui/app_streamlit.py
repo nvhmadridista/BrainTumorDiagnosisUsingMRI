@@ -19,7 +19,7 @@ except Exception:
     pass
 
 DEFAULT_PREDICT_URL = "https://brain-tumor-diagnosis-predict-api.onrender.com/predict"
-DEFAULT_GRADCAM_URL = "https://brain-tumor-diagnosis-gradcam-api.onrender.com/gradcam"
+DEFAULT_GRADCAM_URL = "https://brain-tumor-diagnosis-grad-cam-api.onrender.com/gradcam"
 
 API_PREDICT_URL = os.environ.get("API_PREDICT_URL", DEFAULT_PREDICT_URL)
 API_GRADCAM_URL = os.environ.get("API_GRADCAM_URL", DEFAULT_GRADCAM_URL)
@@ -48,7 +48,7 @@ def main() -> None:
     if st.button("Predict"):
         files = {"file": (uploaded.name, uploaded.getvalue(), uploaded.type or "application/octet-stream")}
         with st.spinner("Predicting..."):
-            resp_pred = requests.post(API_PREDICT_URL, files=files, timeout=60)
+            resp_pred = requests.post(API_PREDICT_URL, files=files, timeout=120)
 
         if resp_pred.status_code != 200:
             st.error(f"Predict request failed: {resp_pred.status_code} - {resp_pred.text}")
@@ -60,7 +60,7 @@ def main() -> None:
         class_names: List[str] = data_pred["class_names"]
 
         with st.spinner("Generating Grad-CAM..."):
-            resp_cam = requests.post(API_GRADCAM_URL, files=files, timeout=60)
+            resp_cam = requests.post(API_GRADCAM_URL, files=files, timeout=120)
 
         if resp_cam.status_code != 200:
             st.warning(f"Grad-CAM request failed: {resp_cam.status_code} - {resp_cam.text}")
