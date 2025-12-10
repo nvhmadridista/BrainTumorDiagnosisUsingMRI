@@ -19,7 +19,6 @@ from .inference import Predictor
 TS_PATH = Path("models/best_model.ts")
 CKPT_PATH = Path("src/checkpoints/best_model_gpu.pth")
 
-TS_URL = "https://drive.google.com/uc?id=1p31v6AtVpfWuxXbSEKZmsAm6uIiiDjO6"
 CKPT_URL = "https://drive.google.com/uc?id=1NrPv01afH327UcfsDcIgKJfrHHyCJ0Vo"
 
 # Logging
@@ -27,12 +26,8 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("api")
 
 def download_model():
-    TS_PATH.parent.mkdir(parents=True, exist_ok=True)
     CKPT_PATH.parent.mkdir(parents=True, exist_ok=True)
-
-    if not TS_PATH.exists():
-        logger.info(f"Downloading TorchScript model from {TS_URL}")
-        gdown.download(TS_URL, str(TS_PATH), quiet=False)
+    
     if not CKPT_PATH.exists():
         logger.info(f"Downloading checkpoint from {CKPT_URL}")
         gdown.download(CKPT_URL, str(CKPT_PATH), quiet=False)
