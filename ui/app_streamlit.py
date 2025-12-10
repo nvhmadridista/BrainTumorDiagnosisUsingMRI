@@ -18,7 +18,7 @@ try:
 except Exception:
     pass
 
-DEFAULT_PREDICT_URL = "https://brain-tumor-diagnosis-predict-api.onrender.com/predict"
+DEFAULT_PREDICT_URL = "https://nvhmadridista-Brain-Tumor-Classifier.hf.space/predict"
 DEFAULT_GRADCAM_URL = "https://nvhmadridista-Brain-Tumor-Diagnosis.hf.space/gradcam"
 
 API_PREDICT_URL = os.environ.get("API_PREDICT_URL", DEFAULT_PREDICT_URL)
