@@ -2,5 +2,5 @@ dataset/
 dataset_imagenet/
 __pycache__/
 *.pyc
-src/checkpoints/
+*.pth
 *.ts

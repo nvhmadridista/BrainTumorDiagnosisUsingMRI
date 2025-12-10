@@ -18,8 +18,11 @@ try:
 except Exception:
     pass
 
-DEFAULT_API_URL = "http://localhost:8000/predict"
-API_URL = os.environ.get("API_URL", DEFAULT_API_URL)
+DEFAULT_PREDICT_URL = "https://brain-tumor-api.onrender.com/predict"
+DEFAULT_GRADCAM_URL = "https://brain-tumor-gradcam.onrender.com/gradcam"
+
+API_PREDICT_URL = os.environ.get("API_PREDICT_URL", DEFAULT_PREDICT_URL)
+API_GRADCAM_URL = os.environ.get("API_GRADCAM_URL", DEFAULT_GRADCAM_URL)
 
 
 def decode_base64_png(b64: str) -> Image.Image:
@@ -45,17 +48,26 @@ def main() -> None:
     if st.button("Predict"):
         files = {"file": (uploaded.name, uploaded.getvalue(), uploaded.type or "application/octet-stream")}
         with st.spinner("Predicting..."):
-            resp = requests.post(API_URL, files=files, timeout=60)
+            resp_pred = requests.post(API_PREDICT_URL, files=files, timeout=60)
 
-        if resp.status_code != 200:
-            st.error(f"Request failed: {resp.status_code} - {resp.text}")
+        if resp_pred.status_code != 200:
+            st.error(f"Predict request failed: {resp_pred.status_code} - {resp_pred.text}")
             return
 
-        data: Dict[str, Any] = resp.json()
-        pred_class: str = data["predicted_class"]
-        scores: List[float] = data["confidence_scores"]
-        class_names: List[str] = data["class_names"]
-        overlay_b64: str = data["gradcam_overlay"]
+        data_pred: Dict[str, Any] = resp_pred.json()
+        pred_class: str = data_pred["predicted_class"]
+        scores: List[float] = data_pred["confidence_scores"]
+        class_names: List[str] = data_pred["class_names"]
+
+        with st.spinner("Generating Grad-CAM..."):
+            resp_cam = requests.post(API_GRADCAM_URL, files=files, timeout=60)
+
+        if resp_cam.status_code != 200:
+            st.warning(f"Grad-CAM request failed: {resp_cam.status_code} - {resp_cam.text}")
+            overlay_b64 = None
+        else:
+            data_cam: Dict[str, Any] = resp_cam.json()
+            overlay_b64 = data_cam.get("gradcam_overlay")
 
         with col2:
             st.subheader("Prediction")
@@ -69,8 +81,11 @@ def main() -> None:
                 st.progress(pct)
 
             st.subheader("Grad-CAM")
-            overlay_img = decode_base64_png(overlay_b64)
-            st.image(overlay_img, caption="Grad-CAM Overlay", use_column_width=True)
+            if overlay_b64:
+                overlay_img = decode_base64_png(overlay_b64)
+                st.image(overlay_img, caption="Grad-CAM Overlay", use_column_width=True)
+            else:
+                st.info("Grad-CAM overlay unavailable.")
 
 if __name__ == "__main__":
     main()
